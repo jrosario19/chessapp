@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "47403630684",
+    "project_id": "flutterchess-a4683",
+    "storage_bucket": "flutterchess-a4683.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:47403630684:android:e758846943194319cd6699",
+        "android_client_info": {
+          "package_name": "com.example.chessapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAWu5YvEpIS5eFN5_vJ4I4-fb9b0aGlt0w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
