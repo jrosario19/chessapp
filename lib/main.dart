@@ -1,3 +1,4 @@
+import 'package:chessapp/authentication/landing_screen.dart';
 import 'package:chessapp/authentication/login_screen.dart';
 import 'package:chessapp/authentication/sign_up_screen.dart';
 import 'package:chessapp/main_screens/about_screen.dart';
@@ -6,6 +7,7 @@ import 'package:chessapp/main_screens/game_start_up_screen.dart';
 import 'package:chessapp/main_screens/game_time_screen.dart';
 import 'package:chessapp/main_screens/home_screen.dart';
 import 'package:chessapp/main_screens/settings_screen.dart';
+import 'package:chessapp/providers/authentication_provider.dart';
 import 'package:chessapp/providers/game_provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -22,7 +24,8 @@ void main() async {
   runApp(
       MultiProvider(
           providers:[
-            ChangeNotifierProvider(create: (_)=> GameProvider())
+            ChangeNotifierProvider(create: (_)=> GameProvider()),
+            ChangeNotifierProvider(create: (_)=> AuthenticatioProvider())
           ],
       child: const MyApp()));
 }
@@ -40,7 +43,7 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.blue,
       ),
       //home: const HomaScreen(),
-      initialRoute: Constants.loginScreen,
+      initialRoute: Constants.landingScreen,
       routes: {
         Constants.homeScreen: (context)=>HomaScreen(),
         Constants.gameScreen: (context)=>GameScreen(),
@@ -49,6 +52,7 @@ class MyApp extends StatelessWidget {
         Constants.gameTimeScreen: (context)=>GameTimeScreen(),
         Constants.loginScreen:(context)=>LoginScreen(),
         Constants.signUpScreen:(context)=>SignUpScreen(),
+        Constants.landingScreen:(context)=>LandingScreen(),
 
 
       },

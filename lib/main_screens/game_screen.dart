@@ -1,5 +1,7 @@
 import 'package:chessapp/helper/helper_methods.dart';
 import 'package:chessapp/helper/uci_commands.dart';
+import 'package:chessapp/models/user_model.dart';
+import 'package:chessapp/providers/authentication_provider.dart';
 import 'package:chessapp/providers/game_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:chessapp/service/assets_manager.dart';
@@ -46,22 +48,46 @@ class _GameScreenState extends State<GameScreen> {
 
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) async {
       final gameProvider = context.read<GameProvider>();
-      if (gameProvider.state.state == PlayState.theirTurn && !gameProvider.aiThinking) {
-        gameProvider.setAIThinking(true);
-        await Future.delayed(
-            Duration(milliseconds: Random().nextInt(4750) + 250));
-        gameProvider.game.makeRandomMove();
-        gameProvider.setAIThinking(false);
-        gameProvider.setSquaresState().whenComplete(() {
-            gameProvider.pauseWhitesTimer();
-            startTimer(isWhitesTimer: false, onNewGame: (){
+      if(gameProvider.vsComputer){
+        if (gameProvider.state.state == PlayState.theirTurn && !gameProvider.aiThinking) {
+          gameProvider.setAIThinking(true);
+          await Future.delayed(
+              Duration(milliseconds: Random().nextInt(4750) + 250));
+          gameProvider.game.makeRandomMove();
+          gameProvider.setAIThinking(false);
+          gameProvider.setSquaresState().whenComplete(() {
+            if (gameProvider.player == Squares.white) {
+              // check if we can play whitesTimer
+              if (gameProvider.playWhitesTimer) {
+                // pause timer for black
+                gameProvider.pauseBlacksTimer();
 
-            });
+                startTimer(
+                  isWhitesTimer: true,
+                  onNewGame: () {},
+                );
 
+                gameProvider.setPlayWhitesTimer(value: false);
+              }
+            } else {
+              if (gameProvider.playBlacksTimer) {
+                // pause timer for white
+                gameProvider.pauseWhitesTimer();
 
+                startTimer(
+                  isWhitesTimer: false,
+                  onNewGame: () {},
+                );
 
-        });
-
+                gameProvider.setPlayBlactsTimer(value: false);
+              }
+            }
+          });
+        }
+      }else{
+        final userModel = context.read<AuthenticatioProvider>().userModel;
+        //listen for game changes in firestore
+        gameProvider.listenForGameChanges(context: context, userModel: userModel!);
       }
     });
   }
@@ -73,26 +99,39 @@ class _GameScreenState extends State<GameScreen> {
 
     if (result) {
 
-      gameProvider.setSquaresState().whenComplete(() {
+      gameProvider.setSquaresState().whenComplete(() async{
 
         if(gameProvider.player==Squares.white){
-          gameProvider.pauseWhitesTimer();
-          startTimer(isWhitesTimer: false, onNewGame: (){
+          if(gameProvider.vsComputer){
+            gameProvider.pauseWhitesTimer();
+            startTimer(isWhitesTimer: false, onNewGame: (){
 
-          });
+            });
+            gameProvider.setPlayWhitesTimer(value: true);
+          }else{
+            await gameProvider.playMoveAndSavetoFirestore(context: context, move: move, isWhiteMove: true);
+          }
+
         }else{
-          gameProvider.pauseBlacksTimer();
-          startTimer(isWhitesTimer: true, onNewGame: (){
+          if(gameProvider.vsComputer){
+            gameProvider.pauseBlacksTimer();
+            startTimer(isWhitesTimer: true, onNewGame: (){
 
-          });
+            });
+            gameProvider.setPlayBlactsTimer(value: true);
+          }else{
+            await gameProvider.playMoveAndSavetoFirestore(context: context, move: move, isWhiteMove: false);
+          }
+
         }
 
       });
 
     }
-    if (gameProvider.state.state == PlayState.theirTurn && !gameProvider.aiThinking) {
+    if(gameProvider.vsComputer){
+      if (gameProvider.state.state == PlayState.theirTurn && !gameProvider.aiThinking) {
 
-      gameProvider.setAIThinking(true);
+        gameProvider.setAIThinking(true);
 
 
         await waitUntilReady();
@@ -125,22 +164,24 @@ class _GameScreenState extends State<GameScreen> {
 
 
 
-      // gameProvider.setSquaresState().whenComplete(() {
-      //   if(gameProvider.player==Squares.white){
-      //     gameProvider.pauseBlacksTimer();
-      //     startTimer(isWhitesTimer: true, onNewGame: (){
-      //
-      //     });
-      //   }else{
-      //     gameProvider.pauseWhitesTimer();
-      //     startTimer(isWhitesTimer: false, onNewGame: (){
-      //
-      //     });
-      //   }
-      //
-      // });
+        // gameProvider.setSquaresState().whenComplete(() {
+        //   if(gameProvider.player==Squares.white){
+        //     gameProvider.pauseBlacksTimer();
+        //     startTimer(isWhitesTimer: true, onNewGame: (){
+        //
+        //     });
+        //   }else{
+        //     gameProvider.pauseWhitesTimer();
+        //     startTimer(isWhitesTimer: false, onNewGame: (){
+        //
+        //     });
+        //   }
+        //
+        // });
 
+      }
     }
+
     await Future.delayed(Duration(seconds: 1));
     checkGameOverListener();
   }
@@ -174,6 +215,7 @@ class _GameScreenState extends State<GameScreen> {
   @override
   Widget build(BuildContext context) {
     final gameProvider = context.read<GameProvider>();
+    final userModel = context.read<AuthenticatioProvider>().userModel;
     return WillPopScope(
       onWillPop: ()async{
         bool? leave= await _showExitConfirmDialog(context);
@@ -218,16 +260,9 @@ class _GameScreenState extends State<GameScreen> {
               //mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 //oponent data
-                ListTile(
-                  leading: CircleAvatar(
-                    radius: 25,
-                    backgroundImage: AssetImage(AssetsManager.stockfishIcon),
-                  ),
-                  title: Text('Stockfish'),
-                  subtitle: Text('Rating: 3000'),
-                  trailing: Text(blacksTimer, style: TextStyle(fontSize: 16),),
-                ),
-                Padding(
+                showOpponentData(gameProvider: gameProvider, userModel: userModel!, timeToShow: blacksTimer),
+
+                gameProvider.vsComputer? Padding(
                   padding: const EdgeInsets.all(4.0),
                   child: BoardController(
                     state: gameProvider.flipBoard ? gameProvider.state.board.flipped() : gameProvider.state.board,
@@ -242,16 +277,21 @@ class _GameScreenState extends State<GameScreen> {
                       piece: MarkerTheme.corners(),
                     ),
                     promotionBehaviour: PromotionBehaviour.autoPremove,
-                  ),
-                ),
+                  )):buildChessBoard(gameProvider: gameProvider, userModel: userModel),
+
                 //our data
                 ListTile(
-                  leading: CircleAvatar(
+                  leading:
+
+                  userModel.image==''? CircleAvatar(
                     radius: 25,
                     backgroundImage: AssetImage(AssetsManager.userIcon),
+                  ):CircleAvatar(
+                    radius: 25,
+                    backgroundImage: NetworkImage(userModel.image),
                   ),
-                  title: Text('User3015'),
-                  subtitle: Text('Rating: 1200'),
+                  title: Text(userModel.name),
+                  subtitle: Text('Rating: ${userModel.playerRating}'),
                   trailing: Text(whitesTimer, style: TextStyle(fontSize: 16)),
                 ),
 
@@ -263,6 +303,79 @@ class _GameScreenState extends State<GameScreen> {
         ),
       ),
     );;
+  }
+
+  Widget buildChessBoard({required GameProvider gameProvider, required UserModel userModel}){
+    bool isOurTurn= gameProvider.isWhiteTurn ==(gameProvider.gameCreatorUid==userModel.uid);
+
+    return BoardController(
+      state: gameProvider.flipBoard ? gameProvider.state.board.flipped() : gameProvider.state.board,
+      playState: isOurTurn?PlayState.ourTurn:PlayState.theirTurn,
+      pieceSet: PieceSet.merida(),
+      theme: BoardTheme.brown,
+      moves: gameProvider.state.moves,
+      onMove: _onMove,
+      onPremove: _onMove,
+      markerTheme: MarkerTheme(
+        empty: MarkerTheme.dot,
+        piece: MarkerTheme.corners(),
+      ),
+      promotionBehaviour: PromotionBehaviour.autoPremove,
+    );
+  }
+
+  getState({required GameProvider gameProvider}){
+    if(gameProvider.flipBoard){
+       return gameProvider.state.board.flipped();
+    }else{
+      gameProvider.state.board;
+    }
+  }
+
+  Widget showOpponentData({required GameProvider gameProvider, required UserModel userModel, required String timeToShow}){
+    if(gameProvider.vsComputer){
+      return ListTile(
+        leading: CircleAvatar(
+          radius: 25,
+          backgroundImage: AssetImage(AssetsManager.stockfishIcon),
+        ),
+        title: Text('Stockfish'),
+        subtitle: Text('Rating: ${gameProvider.gameLevel*1000}'),
+        trailing: Text(timeToShow, style: TextStyle(fontSize: 16),),
+      );
+    }else{
+      if(gameProvider.gameCreatorUid ==userModel.uid){
+        return    ListTile(
+          leading:
+
+          gameProvider.userPhoto==''? CircleAvatar(
+            radius: 25,
+            backgroundImage: AssetImage(AssetsManager.userIcon),
+          ):CircleAvatar(
+            radius: 25,
+            backgroundImage: NetworkImage(gameProvider.userPhoto),
+          ),
+          title: Text(gameProvider.userName),
+          subtitle: Text('Rating: ${gameProvider.userRating}'),
+          trailing: Text(timeToShow, style: TextStyle(fontSize: 16)),
+        );
+      }else{
+        return    ListTile(
+          leading:
+
+          gameProvider.gameCreatorPhoto==''? CircleAvatar(
+            radius: 25,
+            backgroundImage: AssetImage(AssetsManager.userIcon),
+          ):CircleAvatar(
+            radius: 25,
+            backgroundImage: NetworkImage(gameProvider.gameCreatorPhoto),
+          ),
+          title: Text(gameProvider.gameCreatorName),
+          subtitle: Text('Rating: ${gameProvider.gameCreatorRating}'),
+          trailing: Text(timeToShow, style: TextStyle(fontSize: 16)),
+        );
+      }
+    }
   }
 
   Future<bool?> _showExitConfirmDialog(BuildContext context) async{
